@@ -42,6 +42,8 @@ public:
     void reduceHeat(int amount);
     void setHeat(int value);
     void addPower(int amount);
+    void incrementWeek();
+    void setName(const std::string& name);
 
     void addTerritory(const Territory& territory);
     bool hasTerritory(const std::string& name) const;

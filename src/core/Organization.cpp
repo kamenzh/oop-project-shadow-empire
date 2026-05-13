@@ -125,6 +125,14 @@ void Organization::addPower(int amount) {
     }
 }
 
+void Organization::incrementWeek() {
+    ++week;
+}
+
+void Organization::setName(const std::string& name) {
+    this->name = name;
+}
+
 void Organization::addTerritory(const Territory& territory) {
     territories.push_back(territory);
 }
