@@ -1,9 +1,15 @@
 #include "game/Game.h"
 
+#include "systems/CrackdownEvent.h"
+#include "systems/DealerQuestionedEvent.h"
+#include "systems/GameEvent.h"
+#include "systems/PolicePatrolEvent.h"
 #include "utils/Constants.h"
 
 #include <iostream>
 #include <limits>
+#include <memory>
+#include <random>
 #include <string>
 
 namespace {
@@ -22,6 +28,11 @@ struct EnforcerTemplate {
     int powerBonus;
     int hireHeat;
 };
+
+std::mt19937& gameRng() {
+    static std::mt19937 rng(std::random_device{}());
+    return rng;
+}
 }
 
 Game::Game()
@@ -51,8 +62,11 @@ void Game::showMainMenu() {
               << "2. Buy Goods\n"
               << "3. Hire Crew Member\n"
               << "4. Manage Dealer Territory\n"
-              << "5. Next Week\n"
-              << "6. Exit\n";
+              << "5. Sell Goods Through Dealer\n"
+              << "6. Show Pending Deals\n"
+              << "7. Expand Territory\n"
+              << "8. Next Week\n"
+              << "9. Exit\n";
 
     const int choice = readInt("Choose an option: ");
     std::cout << '\n';
@@ -71,9 +85,18 @@ void Game::showMainMenu() {
         manageDealerTerritory();
         break;
     case 5:
-        processNextWeek();
+        sellGoodsThroughDealer();
         break;
     case 6:
+        showPendingDeals();
+        break;
+    case 7:
+        expandTerritory();
+        break;
+    case 8:
+        processNextWeek();
+        break;
+    case 9:
         std::cout << "Exiting Shadow Empire.\n";
         running = false;
         return;
@@ -82,7 +105,7 @@ void Game::showMainMenu() {
         break;
     }
 
-    if (choice == 6) {
+    if (choice == 9) {
         return;
     }
 
@@ -278,35 +301,241 @@ void Game::manageDealerTerritory() {
     }
 }
 
+void Game::sellGoodsThroughDealer() {
+    std::vector<Dealer*> dealers = organization.getDealers();
+    if (dealers.empty()) {
+        std::cout << "No dealers available. Hire a dealer first.\n";
+        return;
+    }
+
+    std::cout << "Dealers\n";
+    for (const Dealer* dealer : dealers) {
+        std::cout << "[" << dealer->getId() << "] " << dealer->getName()
+                  << " | Territory: "
+                  << (dealer->hasAssignedTerritory() ? dealer->getAssignedTerritoryName() : "None")
+                  << " | Capacity: " << dealer->getCapacity()
+                  << " | Risk: " << dealer->getRisk()
+                  << " | Busy: " << (dealer->isBusy() ? "yes" : "no") << '\n';
+    }
+
+    const int dealerId = readInt("Enter dealer ID: ");
+    Dealer* dealer = organization.findDealerById(dealerId);
+    if (!dealer) {
+        std::cout << "Dealer not found.\n";
+        return;
+    }
+
+    const int goodsAmount = readInt("Goods amount to sell: ");
+    if (goodsAmount <= 0) {
+        std::cout << "Goods amount must be greater than 0.\n";
+        return;
+    }
+
+    if (dealer->isBusy()) {
+        std::cout << "This dealer is busy and cannot start another sale.\n";
+        return;
+    }
+
+    if (!dealer->hasAssignedTerritory()) {
+        std::cout << "This dealer must be assigned to a territory first.\n";
+        return;
+    }
+
+    if (goodsAmount > dealer->getCapacity()) {
+        std::cout << "This dealer cannot carry that many goods.\n";
+        return;
+    }
+
+    if (goodsAmount > organization.getGoods()) {
+        std::cout << "Not enough goods available.\n";
+        return;
+    }
+
+    if (organization.startDealerSale(dealerId, goodsAmount)) {
+        std::cout << "Deal started successfully. Payment will arrive next week.\n"
+                  << "Expected payment: " << goodsAmount * SELL_PRICE_PER_GOOD << '\n';
+        markActionMade();
+    } else {
+        std::cout << "Could not start dealer sale.\n";
+    }
+}
+
+void Game::showPendingDeals() {
+    const std::vector<PendingDeal>& pendingDeals = organization.getPendingDeals();
+    if (pendingDeals.empty()) {
+        std::cout << "No pending deals.\n";
+        return;
+    }
+
+    std::cout << "Pending Deals\n";
+    for (const auto& deal : pendingDeals) {
+        std::cout << deal.getDealerName()
+                  << " | Territory: " << deal.getTerritoryName()
+                  << " | Goods: " << deal.getGoodsAmount()
+                  << " | Payment: " << deal.getPayment()
+                  << " | Weeks remaining: " << deal.getWeeksRemaining()
+                  << " | Heat risk: " << deal.getHeatRisk() << '\n';
+    }
+}
+
+void Game::expandTerritory() {
+    if (availableTerritories.empty()) {
+        std::cout << "No more territories available.\n";
+        return;
+    }
+
+    std::cout << "Current Power: " << organization.getPower() << "\n\n";
+    for (std::size_t i = 0; i < availableTerritories.size(); ++i) {
+        const Territory& territory = availableTerritories[i];
+        std::cout << i + 1 << ". " << territory.getName()
+                  << " | Required Power: " << territory.getRequiredPower()
+                  << " | Dealer Capacity: " << territory.getDealerCapacity()
+                  << '\n';
+    }
+
+    const int choice = readInt("Choose a territory to unlock: ");
+    if (choice < 1 || choice > static_cast<int>(availableTerritories.size())) {
+        std::cout << "Invalid territory choice.\n";
+        return;
+    }
+
+    const std::size_t selectedIndex = static_cast<std::size_t>(choice - 1);
+    const Territory selectedTerritory = availableTerritories[selectedIndex];
+
+    if (organization.getPower() < selectedTerritory.getRequiredPower()) {
+        std::cout << "Not enough Power to unlock this territory.\n";
+        return;
+    }
+
+    organization.addTerritory(selectedTerritory);
+    availableTerritories.erase(availableTerritories.begin() + selectedIndex);
+
+    std::cout << "Territory unlocked successfully.\n";
+    markActionMade();
+}
+
 void Game::processNextWeek() {
+    const int finishingWeek = organization.getWeek();
     const int startingMoney = organization.getMoney();
     const int startingGoods = organization.getGoods();
     const int startingHeat = organization.getHeat();
-    const int previousWeek = organization.getWeek();
+    const int startingPower = organization.getPower();
+    const int startingPendingDeals = static_cast<int>(organization.getPendingDeals().size());
+    const int totalSalaries = organization.getTotalWeeklySalaries();
+
+    std::cout << "===== WEEK " << finishingWeek << " SUMMARY =====\n";
 
     if (!actionMadeThisWeek) {
         organization.reduceHeat(QUIET_WEEK_HEAT_REDUCTION);
         std::cout << "No actions this week. Heat reduced by "
                   << QUIET_WEEK_HEAT_REDUCTION << ".\n";
+    } else {
+        std::cout << "Actions were made this week. No quiet-week Heat reduction.\n";
     }
 
+    std::cout << "Processing pending deals...\n";
+    organization.processPendingDeals();
     organization.paySalaries();
+    std::cout << "Pending deals processed: " << startingPendingDeals << ".\n";
+    std::cout << "Salaries paid: " << totalSalaries << ".\n";
+    handlePoliceEvents();
+
+    if (checkWinLoseConditions()) {
+        running = false;
+        return;
+    }
+
     organization.incrementWeek();
     actionMadeThisWeek = false;
 
-    std::cout << "\nWeek " << previousWeek << " summary:\n"
+    std::cout << "\nCurrent status:\n"
               << "Money: " << startingMoney << " -> " << organization.getMoney() << '\n'
               << "Goods: " << startingGoods << " -> " << organization.getGoods() << '\n'
               << "Heat: " << startingHeat << " -> " << organization.getHeat() << '\n'
-              << "Now entering week " << organization.getWeek() << ".\n";
+              << "Power: " << startingPower << " -> " << organization.getPower() << '\n'
+              << "Pending deals: " << startingPendingDeals << " -> "
+              << organization.getPendingDeals().size() << '\n'
+              << "\nWeek " << organization.getWeek() << " started.\n";
 }
 
 bool Game::checkWinLoseConditions() {
+    if (organization.getMoney() < 0) {
+        std::cout << "Game Over: The organization ran out of money.\n";
+        return true;
+    }
+
     return false;
 }
 
 void Game::markActionMade() {
     actionMadeThisWeek = true;
+}
+
+int Game::getPoliceEventChance() const {
+    const int heat = organization.getHeat();
+    if (heat < 20) {
+        return 5;
+    }
+    if (heat < 40) {
+        return 10;
+    }
+    if (heat < 60) {
+        return 20;
+    }
+    if (heat < 80) {
+        return 35;
+    }
+    if (heat < 100) {
+        return 50;
+    }
+    return 100;
+}
+
+bool Game::rollChance(int percent) const {
+    if (percent <= 0) {
+        return false;
+    }
+    if (percent >= 100) {
+        return true;
+    }
+
+    std::uniform_int_distribution<int> distribution(1, 100);
+    return distribution(gameRng()) <= percent;
+}
+
+void Game::handlePoliceEvents() {
+    auto applyAndPrintEvent = [this](GameEvent& event) {
+        std::cout << "\nPolice event:\n"
+                  << event.getName() << '\n'
+                  << event.getDescription() << '\n';
+        event.apply(organization);
+    };
+
+    if (organization.getHeat() >= CRACKDOWN_HEAT_THRESHOLD) {
+        CrackdownEvent crackdown;
+        applyAndPrintEvent(crackdown);
+        return;
+    }
+
+    const int eventChance = getPoliceEventChance();
+    if (!rollChance(eventChance)) {
+        std::cout << "\nNo police event this week.\n";
+        return;
+    }
+
+    std::unique_ptr<GameEvent> event;
+    if (rollChance(50)) {
+        event = std::make_unique<PolicePatrolEvent>();
+    } else {
+        event = std::make_unique<DealerQuestionedEvent>();
+    }
+
+    applyAndPrintEvent(*event);
+
+    if (organization.getHeat() >= CRACKDOWN_HEAT_THRESHOLD) {
+        CrackdownEvent crackdown;
+        applyAndPrintEvent(crackdown);
+    }
 }
 
 void Game::initializeTerritories() {

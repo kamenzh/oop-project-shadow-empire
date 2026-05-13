@@ -25,10 +25,16 @@ public:
     void hireDealerMenu();
     void hireEnforcerMenu();
     void manageDealerTerritory();
+    void sellGoodsThroughDealer();
+    void showPendingDeals();
+    void expandTerritory();
     void processNextWeek();
     bool checkWinLoseConditions();
     void markActionMade();
     void initializeTerritories();
+    int getPoliceEventChance() const;
+    bool rollChance(int percent) const;
+    void handlePoliceEvents();
 
     int readInt(const std::string& prompt);
     std::string readLine(const std::string& prompt);

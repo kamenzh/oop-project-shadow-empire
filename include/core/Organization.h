@@ -33,6 +33,7 @@ public:
     bool hireDealer(const std::string& name, int hirePrice, int salary, int capacity, int risk);
     bool hireEnforcer(const std::string& name, int hirePrice, int salary, int powerBonus, int hireHeat);
     void paySalaries();
+    int getTotalWeeklySalaries() const;
 
     void addMoney(int amount);
     bool spendMoney(int amount);
@@ -71,6 +72,7 @@ public:
     int getPower() const;
     int getNextCrewId() const;
     const std::vector<Territory>& getTerritories() const;
+    const std::vector<PendingDeal>& getPendingDeals() const;
     std::string getStatus() const;
 };
 

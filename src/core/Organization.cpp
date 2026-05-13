@@ -3,6 +3,7 @@
 #include "utils/Constants.h"
 
 #include <algorithm>
+#include <random>
 #include <sstream>
 
 Organization::Organization(const std::string& name)
@@ -65,12 +66,18 @@ bool Organization::hireEnforcer(const std::string& name,
 }
 
 void Organization::paySalaries() {
+    for (const auto& member : crew) {
+        money -= member->getWeeklySalary();
+    }
+}
+
+int Organization::getTotalWeeklySalaries() const {
     int totalSalary = 0;
     for (const auto& member : crew) {
         totalSalary += member->getWeeklySalary();
     }
 
-    spendMoney(totalSalary);
+    return totalSalary;
 }
 
 void Organization::addMoney(int amount) {
@@ -184,20 +191,75 @@ bool Organization::assignDealerToTerritory(int dealerId, const std::string& terr
 }
 
 bool Organization::startDealerSale(int dealerId, int goodsAmount) {
-    (void)dealerId;
-    (void)goodsAmount;
-    return false;
+    if (goodsAmount <= 0) {
+        return false;
+    }
+
+    Dealer* dealer = findDealerById(dealerId);
+    if (!dealer || dealer->isBusy() || !dealer->hasAssignedTerritory()) {
+        return false;
+    }
+
+    if (goodsAmount > dealer->getCapacity() || goodsAmount > goods) {
+        return false;
+    }
+
+    if (!removeGoods(goodsAmount)) {
+        return false;
+    }
+
+    addHeat(dealer->getRisk());
+    dealer->setBusy(true);
+
+    const int paymentAmount = goodsAmount * SELL_PRICE_PER_GOOD;
+    pendingDeals.push_back(PendingDeal(dealer->getId(),
+                                       dealer->getName(),
+                                       dealer->getAssignedTerritoryName(),
+                                       goodsAmount,
+                                       paymentAmount,
+                                       1,
+                                       dealer->getRisk()));
+
+    return true;
 }
 
-void Organization::processPendingDeals() {}
+void Organization::processPendingDeals() {
+    std::vector<PendingDeal> remainingDeals;
+    remainingDeals.reserve(pendingDeals.size());
+
+    for (PendingDeal& deal : pendingDeals) {
+        const bool complete = deal.processWeek();
+        if (complete) {
+            addMoney(deal.getPayment());
+            reduceHeat(deal.getHeatRisk());
+
+            Dealer* dealer = findDealerById(deal.getDealerId());
+            if (dealer) {
+                dealer->setBusy(false);
+            }
+        } else {
+            remainingDeals.push_back(deal);
+        }
+    }
+
+    pendingDeals = std::move(remainingDeals);
+}
 
 bool Organization::delayRandomPendingDeal(int weeks) {
-    (void)weeks;
-    return false;
+    if (pendingDeals.empty()) {
+        return false;
+    }
+
+    static std::mt19937 rng(std::random_device{}());
+    std::uniform_int_distribution<std::size_t> distribution(0, pendingDeals.size() - 1);
+    pendingDeals[distribution(rng)].delay(weeks);
+    return true;
 }
 
 void Organization::delayAllPendingDeals(int weeks) {
-    (void)weeks;
+    for (auto& deal : pendingDeals) {
+        deal.delay(weeks);
+    }
 }
 
 Dealer* Organization::findDealerById(int id) {
@@ -238,12 +300,14 @@ std::vector<Enforcer*> Organization::getEnforcers() {
 void Organization::reduceMoneyPercent(int percent) {
     if (percent > 0) {
         money -= money * std::min(percent, 100) / 100;
+        money = std::max(0, money);
     }
 }
 
 void Organization::reduceGoodsPercent(int percent) {
     if (percent > 0) {
         goods -= goods * std::min(percent, 100) / 100;
+        goods = std::max(0, goods);
     }
 }
 
@@ -277,6 +341,10 @@ int Organization::getNextCrewId() const {
 
 const std::vector<Territory>& Organization::getTerritories() const {
     return territories;
+}
+
+const std::vector<PendingDeal>& Organization::getPendingDeals() const {
+    return pendingDeals;
 }
 
 std::string Organization::getStatus() const {
@@ -331,6 +399,20 @@ std::string Organization::getStatus() const {
                    << " | requiredPower: " << territory.getRequiredPower()
                    << " | capacity: " << territory.getDealerCapacity()
                    << " | freeSlots: " << getFreeSlotsInTerritory(territory.getName()) << '\n';
+        }
+    }
+
+    output << "\nPending Deals:\n";
+    if (pendingDeals.empty()) {
+        output << "  None\n";
+    } else {
+        for (const auto& deal : pendingDeals) {
+            output << "  " << deal.getDealerName()
+                   << " | territory: " << deal.getTerritoryName()
+                   << " | goods: " << deal.getGoodsAmount()
+                   << " | payment: " << deal.getPayment()
+                   << " | weeksRemaining: " << deal.getWeeksRemaining()
+                   << " | heatRisk: " << deal.getHeatRisk() << '\n';
         }
     }
 
