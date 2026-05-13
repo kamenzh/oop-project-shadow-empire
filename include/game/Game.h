@@ -24,6 +24,7 @@ public:
     void hireCrewMember();
     void hireDealerMenu();
     void hireEnforcerMenu();
+    void manageDealerTerritory();
     void processNextWeek();
     bool checkWinLoseConditions();
     void markActionMade();

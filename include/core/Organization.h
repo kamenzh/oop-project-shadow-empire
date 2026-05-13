@@ -70,6 +70,7 @@ public:
     int getHeat() const;
     int getPower() const;
     int getNextCrewId() const;
+    const std::vector<Territory>& getTerritories() const;
     std::string getStatus() const;
 };
 

@@ -275,6 +275,10 @@ int Organization::getNextCrewId() const {
     return nextCrewId;
 }
 
+const std::vector<Territory>& Organization::getTerritories() const {
+    return territories;
+}
+
 std::string Organization::getStatus() const {
     std::ostringstream output;
 

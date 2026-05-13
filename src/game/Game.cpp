@@ -50,8 +50,9 @@ void Game::showMainMenu() {
               << "1. Show Status\n"
               << "2. Buy Goods\n"
               << "3. Hire Crew Member\n"
-              << "4. Next Week\n"
-              << "5. Exit\n";
+              << "4. Manage Dealer Territory\n"
+              << "5. Next Week\n"
+              << "6. Exit\n";
 
     const int choice = readInt("Choose an option: ");
     std::cout << '\n';
@@ -67,9 +68,12 @@ void Game::showMainMenu() {
         hireCrewMember();
         break;
     case 4:
-        processNextWeek();
+        manageDealerTerritory();
         break;
     case 5:
+        processNextWeek();
+        break;
+    case 6:
         std::cout << "Exiting Shadow Empire.\n";
         running = false;
         return;
@@ -78,7 +82,7 @@ void Game::showMainMenu() {
         break;
     }
 
-    if (choice == 5) {
+    if (choice == 6) {
         return;
     }
 
@@ -201,6 +205,76 @@ void Game::hireEnforcerMenu() {
         markActionMade();
     } else {
         std::cout << "Not enough money to hire this enforcer.\n";
+    }
+}
+
+void Game::manageDealerTerritory() {
+    std::vector<Dealer*> dealers = organization.getDealers();
+    if (dealers.empty()) {
+        std::cout << "No dealers available. Hire a dealer first.\n";
+        return;
+    }
+
+    std::cout << "Dealers\n";
+    for (const Dealer* dealer : dealers) {
+        std::cout << "[" << dealer->getId() << "] " << dealer->getName()
+                  << " | Territory: "
+                  << (dealer->hasAssignedTerritory() ? dealer->getAssignedTerritoryName() : "None")
+                  << " | Busy: " << (dealer->isBusy() ? "yes" : "no") << '\n';
+    }
+
+    const int dealerId = readInt("Enter dealer ID: ");
+    Dealer* selectedDealer = organization.findDealerById(dealerId);
+    if (!selectedDealer) {
+        std::cout << "Dealer not found.\n";
+        return;
+    }
+
+    if (selectedDealer->isBusy()) {
+        std::cout << "This dealer is busy and cannot be moved.\n";
+        return;
+    }
+
+    const std::vector<Territory>& territories = organization.getTerritories();
+    if (territories.empty()) {
+        std::cout << "No unlocked territories available.\n";
+        return;
+    }
+
+    std::cout << "\nUnlocked Territories\n";
+    for (std::size_t i = 0; i < territories.size(); ++i) {
+        const Territory& territory = territories[i];
+        std::cout << i + 1 << ". " << territory.getName()
+                  << " | Required power: " << territory.getRequiredPower()
+                  << " | Capacity: " << territory.getDealerCapacity()
+                  << " | Free slots: " << organization.getFreeSlotsInTerritory(territory.getName())
+                  << '\n';
+    }
+
+    const int territoryChoice = readInt("Choose a territory: ");
+    if (territoryChoice < 1 || territoryChoice > static_cast<int>(territories.size())) {
+        std::cout << "Invalid territory choice.\n";
+        return;
+    }
+
+    const Territory& selectedTerritory = territories[territoryChoice - 1];
+    const std::string territoryName = selectedTerritory.getName();
+
+    if (selectedDealer->getAssignedTerritoryName() == territoryName) {
+        std::cout << "Dealer is already assigned to this territory.\n";
+        return;
+    }
+
+    if (organization.getFreeSlotsInTerritory(territoryName) <= 0) {
+        std::cout << "This territory has no free dealer slots.\n";
+        return;
+    }
+
+    if (organization.assignDealerToTerritory(dealerId, territoryName)) {
+        std::cout << "Dealer assigned successfully.\n";
+        markActionMade();
+    } else {
+        std::cout << "Could not assign dealer to that territory.\n";
     }
 }
 
