@@ -3,6 +3,7 @@
 
 #include "core/Organization.h"
 #include "models/Territory.h"
+#include "systems/SaveManager.h"
 
 #include <string>
 #include <vector>
@@ -10,6 +11,7 @@
 class Game {
 private:
     Organization organization;
+    SaveManager saveManager;
     std::vector<Territory> availableTerritories;
     bool actionMadeThisWeek;
     bool running;
@@ -28,6 +30,9 @@ public:
     void sellGoodsThroughDealer();
     void showPendingDeals();
     void expandTerritory();
+    void saveGame();
+    void loadGame();
+    void rebuildAvailableTerritories();
     void processNextWeek();
     bool checkWinLoseConditions();
     void markActionMade();

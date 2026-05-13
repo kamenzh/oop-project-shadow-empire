@@ -37,6 +37,7 @@ std::mt19937& gameRng() {
 
 Game::Game()
     : organization("Black Raven"),
+      saveManager(),
       actionMadeThisWeek(false),
       running(true) {
     organization.addTerritory(Territory("Old Town", 0, 1));
@@ -66,7 +67,9 @@ void Game::showMainMenu() {
               << "6. Show Pending Deals\n"
               << "7. Expand Territory\n"
               << "8. Next Week\n"
-              << "9. Exit\n";
+              << "9. Save Game\n"
+              << "10. Load Game\n"
+              << "11. Exit\n";
 
     const int choice = readInt("Choose an option: ");
     std::cout << '\n';
@@ -97,6 +100,12 @@ void Game::showMainMenu() {
         processNextWeek();
         break;
     case 9:
+        saveGame();
+        break;
+    case 10:
+        loadGame();
+        break;
+    case 11:
         std::cout << "Exiting Shadow Empire.\n";
         running = false;
         return;
@@ -105,7 +114,7 @@ void Game::showMainMenu() {
         break;
     }
 
-    if (choice == 9) {
+    if (choice == 11) {
         return;
     }
 
@@ -414,6 +423,43 @@ void Game::expandTerritory() {
     markActionMade();
 }
 
+void Game::saveGame() {
+    if (saveManager.save(organization)) {
+        std::cout << "Game saved successfully.\n";
+    } else {
+        std::cout << "Failed to save game.\n";
+    }
+}
+
+void Game::loadGame() {
+    if (saveManager.load(organization)) {
+        rebuildAvailableTerritories();
+        actionMadeThisWeek = false;
+        std::cout << "Game loaded successfully.\n";
+        if (checkWinLoseConditions()) {
+            running = false;
+        }
+    } else {
+        std::cout << "Failed to load game.\n";
+    }
+}
+
+void Game::rebuildAvailableTerritories() {
+    availableTerritories.clear();
+
+    const std::vector<Territory> allExpandableTerritories = {
+        Territory("Harbor", 15, 2),
+        Territory("Downtown", 35, 3),
+        Territory("Industrial Zone", 55, 4),
+    };
+
+    for (const Territory& territory : allExpandableTerritories) {
+        if (!organization.hasTerritory(territory.getName())) {
+            availableTerritories.push_back(territory);
+        }
+    }
+}
+
 void Game::processNextWeek() {
     const int finishingWeek = organization.getWeek();
     const int startingMoney = organization.getMoney();
@@ -460,7 +506,16 @@ void Game::processNextWeek() {
 
 bool Game::checkWinLoseConditions() {
     if (organization.getMoney() < 0) {
-        std::cout << "Game Over: The organization ran out of money.\n";
+        std::cout << "\nGAME OVER\n"
+                  << "The organization ran out of money.\n";
+        return true;
+    }
+
+    if (organization.getMoney() >= 30000 &&
+        organization.getPower() >= 40 &&
+        organization.getTerritories().size() >= 3) {
+        std::cout << "\nYOU WIN\n"
+                  << "Your organization became the strongest power in the city.\n";
         return true;
     }
 

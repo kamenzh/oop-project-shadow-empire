@@ -64,7 +64,9 @@ public:
     void reduceMoneyPercent(int percent);
     void reduceGoodsPercent(int percent);
 
-    std::string getName() const;
+    const std::vector<std::unique_ptr<CrewMember>>& getCrew() const;
+
+    const std::string& getName() const;
     int getWeek() const;
     int getMoney() const;
     int getGoods() const;
@@ -74,6 +76,17 @@ public:
     const std::vector<Territory>& getTerritories() const;
     const std::vector<PendingDeal>& getPendingDeals() const;
     std::string getStatus() const;
+
+    void loadState(const std::string& name,
+                   int week,
+                   int money,
+                   int goods,
+                   int heat,
+                   int power,
+                   int nextCrewId,
+                   std::vector<std::unique_ptr<CrewMember>> crew,
+                   std::vector<Territory> territories,
+                   std::vector<PendingDeal> pendingDeals);
 };
 
 #endif

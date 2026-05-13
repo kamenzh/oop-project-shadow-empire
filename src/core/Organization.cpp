@@ -297,6 +297,10 @@ std::vector<Enforcer*> Organization::getEnforcers() {
     return enforcers;
 }
 
+const std::vector<std::unique_ptr<CrewMember>>& Organization::getCrew() const {
+    return crew;
+}
+
 void Organization::reduceMoneyPercent(int percent) {
     if (percent > 0) {
         money -= money * std::min(percent, 100) / 100;
@@ -311,7 +315,7 @@ void Organization::reduceGoodsPercent(int percent) {
     }
 }
 
-std::string Organization::getName() const {
+const std::string& Organization::getName() const {
     return name;
 }
 
@@ -417,4 +421,26 @@ std::string Organization::getStatus() const {
     }
 
     return output.str();
+}
+
+void Organization::loadState(const std::string& name,
+                             int week,
+                             int money,
+                             int goods,
+                             int heat,
+                             int power,
+                             int nextCrewId,
+                             std::vector<std::unique_ptr<CrewMember>> crew,
+                             std::vector<Territory> territories,
+                             std::vector<PendingDeal> pendingDeals) {
+    this->name = name;
+    this->week = week;
+    this->money = money;
+    this->goods = goods;
+    this->heat = std::max(0, heat);
+    this->power = power;
+    this->nextCrewId = nextCrewId;
+    this->crew = std::move(crew);
+    this->territories = std::move(territories);
+    this->pendingDeals = std::move(pendingDeals);
 }
